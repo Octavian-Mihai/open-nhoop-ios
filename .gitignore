@@ -1,0 +1,11 @@
+.DS_Store
+**/.DS_Store
+xcuserdata/
+*.xcuserstate
+DerivedData/
+.build/
+.env
+.env.*
+Secrets.xcconfig
+*.swp
+.idea/
