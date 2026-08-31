@@ -245,21 +245,66 @@ final class MetricsRepository: ObservableObject {
 
     // MARK: - Raw HR series (downsampled stream, for Trends card + HeartRateDetailView)
 
+    /// Time-slice width for `hrSeries` store reads. 24h/3D/7D windows are fetched
+    /// in chunks so a single `hrSamples` call never materializes 86k–600k 1 Hz rows.
+    static let hrSeriesChunkSeconds = 6 * 3_600
+    /// Per-chunk row cap. 6 h at 1 Hz is ~21.6k; headroom covers slightly denser streams.
+    static let hrSeriesChunkLimit = 50_000
+
     /// Fetch a downsampled raw HR series from local `hrSample` for a given epoch-second window.
     /// Maps each (ts, bpm) pair to a TrendPoint so it can be fed directly to MetricChart.
     /// Returns [] when the store is unavailable or the window is empty.
+    ///
+    /// Queries the store in 6-hour chunks and downsamples each chunk immediately so
+    /// 24H / 3D / 7D stay responsive. A single `LIMIT` on the full window would either
+    /// load hundreds of thousands of rows or (with a smaller cap) only the first N
+    /// samples — which looks like “won't load” for anything longer than 6H.
     func hrSeries(fromEpoch: Int, toEpoch: Int, maxPoints: Int) async -> [TrendPoint] {
         await ensureOpen()
         guard let store else { return [] }
-        let raw = (try? await store.hrSamples(deviceId: deviceId, from: fromEpoch, to: toEpoch,
-                                              limit: 2_000_000)) ?? []
-        return Self.downsample(raw, maxPoints: maxPoints).map { sample in
+        guard toEpoch >= fromEpoch, maxPoints > 0 else { return [] }
+
+        let bounds = Self.hrSeriesChunkBounds(
+            from: fromEpoch, to: toEpoch, chunkSeconds: Self.hrSeriesChunkSeconds)
+        let perChunk = max(8, (maxPoints + bounds.count - 1) / bounds.count)
+
+        var merged: [HRSample] = []
+        merged.reserveCapacity(min(maxPoints, bounds.count * perChunk))
+
+        for (chunkFrom, chunkTo) in bounds {
+            var cursor = chunkFrom
+            while cursor <= chunkTo {
+                let raw = (try? await store.hrSamples(
+                    deviceId: deviceId, from: cursor, to: chunkTo,
+                    limit: Self.hrSeriesChunkLimit)) ?? []
+                guard let last = raw.last else { break }
+                merged.append(contentsOf: Self.downsample(raw, maxPoints: perChunk))
+                if raw.count < Self.hrSeriesChunkLimit { break }
+                let next = last.ts + 1
+                if next <= cursor { break }
+                cursor = next
+            }
+        }
+        return Self.downsample(merged, maxPoints: maxPoints).map { sample in
             TrendPoint(
                 id: "\(sample.ts)",
                 date: Date(timeIntervalSince1970: TimeInterval(sample.ts)),
                 value: Double(sample.bpm)
             )
         }
+    }
+
+    /// Inclusive `[from, to]` split into `chunkSeconds`-wide slices (last slice may be shorter).
+    static func hrSeriesChunkBounds(from: Int, to: Int, chunkSeconds: Int) -> [(Int, Int)] {
+        guard to >= from, chunkSeconds > 0 else { return [] }
+        var out: [(Int, Int)] = []
+        var start = from
+        while start <= to {
+            let end = min(start + chunkSeconds - 1, to)
+            out.append((start, end))
+            start = end + 1
+        }
+        return out
     }
 
     /// Evenly stride `samples` down to at most `maxPoints`, always keeping first and last.

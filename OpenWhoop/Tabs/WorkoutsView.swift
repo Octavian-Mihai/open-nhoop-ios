@@ -129,18 +129,6 @@ struct WorkoutsView: View {
             // Strain badge
             strainBadge(w.strain)
 
-            // Calories
-            VStack(alignment: .trailing, spacing: 1) {
-                Text(w.caloriesKcal.map { String(format: "%.0f", $0) } ?? "—")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundStyle(w.caloriesKcal != nil ? WH.Color.recoveryYellow : WH.Color.textSecondary)
-                    .monospacedDigit()
-                Text(w.caloriesKcal != nil ? "kcal" : "")
-                    .font(.system(size: 10, weight: .regular))
-                    .foregroundStyle(WH.Color.textSecondary)
-            }
-            .frame(width: 40, alignment: .trailing)
-
             Image(systemName: "chevron.right")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(WH.Color.textSecondary.opacity(0.5))

@@ -33,13 +33,23 @@ struct HeartRateDetailView: View {
             }
         }
 
-        /// Max points to request from the server — larger windows use more points to preserve shape.
+        /// Max points to request from the store — larger windows use more points to preserve shape.
         var maxPoints: Int {
             switch self {
             case .sixHours:  return 300
             case .oneDay:    return 400
             case .threeDays: return 400
             case .sevenDays: return 500
+            }
+        }
+
+        /// Presentation bin width. Longer windows use coarser buckets so the chart stays light.
+        var binSeconds: Int {
+            switch self {
+            case .sixHours:  return HRChartPresentation.detailBinSeconds
+            case .oneDay:    return HRChartPresentation.compactBinSeconds
+            case .threeDays: return 300
+            case .sevenDays: return 600
             }
         }
     }
@@ -207,9 +217,10 @@ struct HeartRateDetailView: View {
                 showAxes: true,
                 showSelection: true,
                 yDomain: nil,
-                hrBinIntervalSeconds: HRChartPresentation.detailBinSeconds,
+                hrBinIntervalSeconds: selectedWindow.binSeconds,
                 hrResting: Double(metrics.today?.restingHr ?? Int(Strain.defaultRestingHR)),
                 hrMax: Strain.defaultMaxHR(age: ProfileStorage.load()?.age ?? Strain.defaultAge),
+                allowsDragScrub: true,
                 selected: $selected
             )
             .frame(height: 260)

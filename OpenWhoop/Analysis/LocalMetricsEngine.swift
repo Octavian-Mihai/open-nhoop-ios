@@ -115,7 +115,7 @@ struct LocalMetricsEngine {
         }
 
         let dayGrav = grav.filter { $0.ts >= dayStartTs && $0.ts < dayEndTs }
-        let steps = StepCounter.count(dayGrav)
+        let steps = StepCounter.count(dayGrav, sleepWindows: sleepWindows)
         LocalDailyExtrasStore.setSteps(deviceId: deviceId, day: day, steps: steps)
 
         // Recovery: needs ≥4 prior local nights with HRV.

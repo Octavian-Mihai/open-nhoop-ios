@@ -2,10 +2,15 @@ import SwiftUI
 
 // MARK: - WorkoutDetailView
 // Push destination for a single detected workout bout.
-// Header → stats strip → HR-zone breakdown.
+// Header → stats strip → HR time-series → HR-zone breakdown.
 
 struct WorkoutDetailView: View {
     let workout: Workout
+
+    @EnvironmentObject private var metrics: MetricsRepository
+    @State private var hrPoints: [TrendPoint] = []
+    @State private var hrSelected: TrendPoint? = nil
+    @State private var hrIsLoading = true
 
     // MARK: - Body
 
@@ -16,6 +21,7 @@ struct WorkoutDetailView: View {
                 VStack(alignment: .leading, spacing: WH.Spacing.lg) {
                     headerSection
                     statsStrip
+                    hrChartSection
                     zoneSection
                     contextSection
                     Spacer(minLength: WH.Spacing.xl)
@@ -28,6 +34,7 @@ struct WorkoutDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .preferredColorScheme(.dark)
+        .task { await loadHR() }
     }
 
     // MARK: - Header
@@ -79,11 +86,6 @@ struct WorkoutDetailView: View {
                      value: "\(workout.peakHr)",
                      unit: "bpm",
                      color: WH.Color.recoveryRed)
-            divider
-            statCell(label: "CALORIES",
-                     value: workout.caloriesKcal.map { String(format: "%.0f", $0) } ?? "—",
-                     unit: workout.caloriesKcal != nil ? "kcal" : nil,
-                     color: workout.caloriesKcal != nil ? WH.Color.recoveryYellow : WH.Color.textSecondary)
         }
         .padding(.vertical, WH.Spacing.sm)
         .background(WH.Color.surface,
@@ -115,6 +117,57 @@ struct WorkoutDetailView: View {
             }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Workout HR chart
+
+    private var hrChartSection: some View {
+        VStack(alignment: .leading, spacing: WH.Spacing.sm) {
+            sectionHeader("Heart Rate")
+            if hrIsLoading {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                        .tint(WH.Color.textSecondary)
+                    Spacer()
+                }
+                .frame(height: 180)
+                .background(WH.Color.surface,
+                            in: RoundedRectangle(cornerRadius: WH.Radius.card, style: .continuous))
+            } else {
+                MetricChart(
+                    series: hrPoints,
+                    kind: .rawHR,
+                    showAxes: true,
+                    showSelection: true,
+                    yDomain: nil,
+                    hrBinIntervalSeconds: workoutHrBinSeconds,
+                    hrResting: Double(metrics.today?.restingHr ?? Int(Strain.defaultRestingHR)),
+                    hrMax: workout.hrmax ?? Strain.defaultMaxHR(
+                        age: ProfileStorage.load()?.age ?? Strain.defaultAge),
+                    allowsDragScrub: true,
+                    selected: $hrSelected
+                )
+                .frame(height: 200)
+                .padding(WH.Spacing.xs)
+                .background(WH.Color.surface,
+                            in: RoundedRectangle(cornerRadius: WH.Radius.card, style: .continuous))
+            }
+        }
+    }
+
+    /// Tighter bins for short bouts so a 15–30 min workout still has a usable series.
+    private var workoutHrBinSeconds: Int {
+        let dur = max(60, workout.endTs - workout.startTs)
+        return max(10, min(HRChartPresentation.detailBinSeconds, dur / 180))
+    }
+
+    private func loadHR() async {
+        hrIsLoading = true
+        let from = workout.startTs
+        let to = max(workout.endTs, workout.startTs)
+        hrPoints = await metrics.hrSeries(fromEpoch: from, toEpoch: to, maxPoints: 400)
+        hrIsLoading = false
     }
 
     // MARK: - Zone breakdown

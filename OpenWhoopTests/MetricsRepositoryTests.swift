@@ -313,4 +313,38 @@ final class MetricsRepositoryTests: XCTestCase {
         XCTAssertEqual(points.first?.value, 60)
         XCTAssertEqual(Int(points.last?.value ?? 0), 60 + (999 % 5))
     }
+
+    func testHRSeriesChunkBoundsCoverFullWindow() {
+        let start = 1_700_000_000
+        let end = start + 8 * 3_600 - 1
+        let bounds = MetricsRepository.hrSeriesChunkBounds(
+            from: start, to: end, chunkSeconds: MetricsRepository.hrSeriesChunkSeconds)
+        XCTAssertEqual(bounds.count, 2, "8h window must split into a 6h chunk plus remainder")
+        XCTAssertEqual(bounds.first?.0, start)
+        XCTAssertEqual(bounds.last?.1, end)
+        XCTAssertEqual(bounds[0].1 + 1, bounds[1].0)
+    }
+
+    func testHRSeriesChunksSpanPastSixHours() async throws {
+        let store = try await WhoopStore.inMemory()
+        let repo = makeRepo(store: store)
+        let start = 1_700_000_000
+        // 8 hours, one sample every 10s — enough to prove we don't stop at 6H.
+        var hr: [HRSample] = []
+        for i in 0..<(8 * 360) {
+            hr.append(HRSample(ts: start + i * 10, bpm: i < 6 * 360 ? 60 : 90))
+        }
+        _ = try await store.insert(Streams(hr: hr), deviceId: "test-device")
+
+        let points = await repo.hrSeries(
+            fromEpoch: start, toEpoch: start + 8 * 3_600, maxPoints: 80)
+        XCTAssertFalse(points.isEmpty)
+        XCTAssertLessThanOrEqual(points.count, 80)
+        let last = try XCTUnwrap(points.last)
+        XCTAssertGreaterThan(
+            last.date.timeIntervalSince1970,
+            Double(start + 6 * 3_600),
+            "24H/3D/7D must include samples after the first 6h chunk")
+        XCTAssertEqual(Int(last.value.rounded()), 90)
+    }
 }

@@ -18,6 +18,9 @@ struct MetricChart: View {
     /// Resting / max HR for Edwards zone coloring (`.rawHR` only).
     var hrResting: Double = Strain.defaultRestingHR
     var hrMax: Double = Strain.defaultMaxHR()
+    /// Drag-to-scrub. Off on compact Trends daily cards so a scroll/drag does not
+    /// steal the ScrollView or open DayDetailView. On for HeartRateDetailView / workout HR.
+    var allowsDragScrub: Bool = false
     @Binding var selected: TrendPoint?
 
     // MARK: - Body
@@ -147,19 +150,20 @@ struct MetricChart: View {
                 .clipped()
         }
         .clipped()
-        // iOS-16 tap / drag-to-scrub
+        // Selection: tap-only on compact Trends cards (so ScrollView can scroll).
+        // Drag-to-scrub is simultaneous so it does not win over vertical scroll.
         .chartOverlay { proxy in
             GeometryReader { geo in
                 Rectangle()
                     .fill(Color.clear)
                     .contentShape(Rectangle())
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { value in
-                                guard showSelection else { return }
-                                handleTap(location: value.location, proxy: proxy, geometry: geo)
-                            }
-                    )
+                    .allowsHitTesting(showSelection)
+                    .modifier(ChartSelectionGestures(
+                        allowsDragScrub: allowsDragScrub,
+                        onSelect: { location in
+                            handleTap(location: location, proxy: proxy, geometry: geo)
+                        }
+                    ))
             }
         }
         .chartLegend(.hidden)
@@ -437,5 +441,35 @@ struct MetricChart: View {
             }
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - Chart selection gestures
+// Compact Trends cards: SpatialTap only (scroll must win).
+// HR detail / workout: simultaneous drag-to-scrub so a vertical pan still scrolls.
+
+private struct ChartSelectionGestures: ViewModifier {
+    let allowsDragScrub: Bool
+    let onSelect: (CGPoint) -> Void
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if allowsDragScrub {
+            content
+                .simultaneousGesture(
+                    SpatialTapGesture()
+                        .onEnded { event in onSelect(event.location) }
+                )
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 8)
+                        .onChanged { value in onSelect(value.location) }
+                )
+        } else {
+            content
+                .simultaneousGesture(
+                    SpatialTapGesture()
+                        .onEnded { event in onSelect(event.location) }
+                )
+        }
     }
 }

@@ -138,19 +138,51 @@ final class ExerciseDetectionTests: XCTestCase {
 
 final class StepCounterTests: XCTestCase {
 
+    private let t0 = 1_700_000_000
+
+    private func walkLike(start: Int, minutes: Int) -> [GravitySample] {
+        (0..<(minutes * 60)).map { i in
+            let z = i % 2 == 0 ? 1.25 : 0.75
+            return GravitySample(ts: start + i, x: 0.2 * sin(Double(i)), y: 0, z: z)
+        }
+    }
+
     func testStillGravityYieldsZeroSteps() {
-        let rows = (0..<120).map { GravitySample(ts: 1_700_000_000 + $0, x: 0, y: 0, z: 1) }
+        let rows = (0..<120).map { GravitySample(ts: t0 + $0, x: 0, y: 0, z: 1) }
         XCTAssertEqual(StepCounter.count(rows), 0)
     }
 
     func testOscillatingWalkLikeGravityYieldsNonZero() {
+        let steps = StepCounter.count(walkLike(start: t0, minutes: 20))
+        XCTAssertGreaterThan(steps, 0, "walk-like oscillation must produce a non-zero estimate")
+        XCTAssertLessThan(steps, 5_000, "20 walk-like minutes must be hundreds/low-thousands, not 10k+")
+    }
+
+    func testFewWalkMinutesYieldHundredsNotTensOfThousands() {
+        let steps = StepCounter.count(walkLike(start: t0, minutes: 5))
+        XCTAssertGreaterThan(steps, 50)
+        XCTAssertLessThan(steps, 2_000)
+    }
+
+    func testFullDayStillGravityStaysNearZero() {
+        let rows = (0..<86_400).map { GravitySample(ts: t0 + $0, x: 0, y: 0, z: 1) }
+        XCTAssertEqual(StepCounter.count(rows), 0)
+    }
+
+    func testFullDayTinyNoiseDoesNotApproach100k() {
         var rows: [GravitySample] = []
-        for i in 0..<(20 * 60) {
-            // ~1.5 Hz-ish walk at 1 Hz sampling: alternate z around 1 g.
-            let z = i % 2 == 0 ? 1.25 : 0.75
-            rows.append(GravitySample(ts: 1_700_000_000 + i, x: 0.2 * sin(Double(i)), y: 0, z: z))
+        rows.reserveCapacity(86_400)
+        for i in 0..<86_400 {
+            let n = 0.015 * sin(Double(i) * 0.7)
+            rows.append(GravitySample(ts: t0 + i, x: n, y: n * 0.5, z: 1.0 + n))
         }
         let steps = StepCounter.count(rows)
-        XCTAssertGreaterThan(steps, 0, "walk-like oscillation must produce a non-zero estimate")
+        XCTAssertLessThan(steps, 8_000, "a still-ish 1 Hz day must not approach 100k")
+    }
+
+    func testSleepWindowsYieldZero() {
+        let rows = walkLike(start: t0, minutes: 30)
+        let sleep = [(start: Double(t0), end: Double(t0 + 30 * 60))]
+        XCTAssertEqual(StepCounter.count(rows, sleepWindows: sleep), 0)
     }
 }
