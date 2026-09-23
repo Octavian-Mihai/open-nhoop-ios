@@ -6,10 +6,23 @@ An open-source iOS companion app for the WHOOP 4.0 strap. Connects over Bluetoot
 
 *Mockups with simulated data — illustrative only, not live app captures.*
 
-| Today | Sleep | Trends |
-| --- | --- | --- |
-| ![Today tab](docs/screenshots/today.svg) | ![Sleep tab](docs/screenshots/sleep.svg) | ![Trends tab](docs/screenshots/trends.svg) |
-| Recovery ring, day strain, sleep, HRV/RHR, steps, and live strap readings | Time asleep, hypnogram, sleep stage breakdown, SpO2/skin temp, and smart alarm | Recovery/strain/sleep charts over 7/30/90 days |
+<table>
+<tr>
+<th>Today</th>
+<th>Sleep</th>
+<th>Trends</th>
+</tr>
+<tr>
+<td><img src="docs/screenshots/today.svg" width="240" alt="Today tab"></td>
+<td><img src="docs/screenshots/sleep.svg" width="240" alt="Sleep tab"></td>
+<td><img src="docs/screenshots/trends.svg" width="240" alt="Trends tab"></td>
+</tr>
+<tr>
+<td>Recovery ring, day strain, sleep, HRV/RHR, steps, and live strap readings</td>
+<td>Time asleep, hypnogram, sleep stage breakdown, SpO2/skin temp, and smart alarm</td>
+<td>Recovery/strain/sleep charts over 7/30/90 days</td>
+</tr>
+</table>
 
 ## Requirements
 
