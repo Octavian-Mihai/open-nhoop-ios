@@ -1,5 +1,7 @@
 # OpenWhoop
 
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for an architecture diagram.
+
 An open-source iOS companion app for the WHOOP 4.0 strap. Connects over Bluetooth to read heart rate, HRV, sleep, workouts, and strain locally on-device — no WHOOP account or cloud subscription required.
 
 ## Screenshots
